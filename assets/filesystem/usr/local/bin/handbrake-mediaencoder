@@ -1,17 +1,21 @@
 #!/bin/bash
 
-JOB_BASEDIR=""
-JOB_DESTDIR=""
+JOB_SET_BASEDIR=""
+JOB_SET_DESTDIR=""
+JOB_SET_ENFORCE="n"
+JOB_SET_SRC_FILENAME=""
+
 JOB_SRC_FILENAME=""
 JOB_DST_FILENAME=""
-JOB_VER="/tmp/job-$(od -An -N2 -i /dev/random | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//')"
+JOB_VERSION="/tmp/job-$(od -An -N2 -i /dev/random | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//')"
 JOB_FILE_SUFFIX=""
 JOB_FILE_EXT=""
+JOB_EXIT_CODE="1"
 PRESET_FILE=""
 PRESET_NAME=""
 
 # will make the temporary folder for the job
-mkdir -p "${JOB_VER}"
+mkdir -p "${JOB_VERSION}"
 
 # the main objective is to find all subtitles that match the initial fullpath name
 # so we can remove this and append the subtitle suffix metadata to the destination
@@ -25,61 +29,45 @@ mkdir -p "${JOB_VER}"
 #    "<destination path filename>.eng.srt"
 #    "<destination path filename>.eng.forced.srt"]
 copy-subtitles() {
-  local str_filename_fullpath_no_ext="$1"
-  local str_filename_fullpath_dest_no_ext="$2"
+  local enforce="$1"
+
+  local filename_src_fullpath=$(readlink -f "${JOB_SET_SRC_FILENAME}")
+  local filename_src_fullpath_no_ext="${filename_src_fullpath%.*}"
+  local filename_src_fullpath_folder="${filename_src_fullpath_no_ext%/*}"
+  local filename_src_basename="${filename_src_fullpath_no_ext##*/}"
+
+  local filename_dst_fullpath_dest_no_ext="${JOB_DST_FILENAME}"
+  local filename_dst_fullpath_folder="${filename_dst_fullpath_dest_no_ext%/*}"
 
   OIFS="$IFS"
   IFS=$'\n'
-  for file in `find "${str_filename_fullpath_no_ext%/*}" -type f -iname "${str_filename_fullpath_no_ext##*/}*.srt"`  
+  for file in `find "${filename_src_fullpath_folder}" -type f -iname "${filename_src_basename}*.srt"`  
   do
-    cp "${file}" "${str_filename_fullpath_dest_no_ext} - ${JOB_FILE_SUFFIX}${file#$str_filename_fullpath_no_ext}"
+    local filename_dst_fullpath="${filename_dst_fullpath_dest_no_ext} - ${JOB_FILE_SUFFIX}${file#$filename_src_fullpath_no_ext}"
+
+    if [[ "${enforce}" =~ y || ! -f "${filename_dst_fullpath}" ]]; then
+      cp --remove-destination "${file}" "${filename_dst_fullpath}"
+    fi
   done
   IFS="$OIFS"
 }
 
 set-basedir() {
   local str_basedir="$1"
-  JOB_BASEDIR="${str_basedir}"
+  JOB_SET_BASEDIR="${str_basedir}"
+  update-metadata
 }
 
 set-destdir() {
   local str_destdir="$1"
-  JOB_DESTDIR="${str_destdir}"
+  JOB_SET_DESTDIR="${str_destdir}"
+  update-metadata
 }
 
 set-filename() {
-  local str_filename_fullpath=$(readlink -f "$1")
-  local str_filename_fullpath_no_ext="${str_filename_fullpath%.*}"
-  local str_filename="${str_filename_fullpath##*/}"
-  local str_filename_no_ext="${str_filename%.*}"
-
-  JOB_SRC_FILENAME="${str_filename_fullpath}"
-
-  # when BASEDIR is supplied we shall remove it from filename path so we can build the
-  # same directory structure for de DESTDIR
-  #
-  # ex1: the file and the folder structure will be rendered in destination dir
-  #      filename => /mnt/folder1/folder2/file.mkv
-  #      basedir => /mnt/folder1
-  #      destdir => /mnt/folder3
-  #      filename_dest => /mnt/folder3/folder2/file.mkv
-  #
-  # ex2: the file will be rendered on destination dir
-  #      filename => /mnt/folder1/folder2/file.mkv
-  #      basedir => 
-  #      destdir => /mnt/folder3
-  #      filename_dest => /mnt/folder3/file.mkv
-  if [ -n "$JOB_BASEDIR" ]; then
-    JOB_DST_FILENAME="${JOB_DESTDIR}/${str_filename_fullpath_no_ext#$JOB_BASEDIR}"
-  else
-    JOB_DST_FILENAME="${JOB_DESTDIR}/${str_filename_no_ext}"
-  fi
-
-  # make destination directory based on final file name
-  local str_filename_basepath=${JOB_DST_FILENAME%/*}
-  mkdir -p "${str_filename_basepath}"
-
-  copy-subtitles "${str_filename_fullpath_no_ext}" "${JOB_DST_FILENAME}"
+  local str_destdir="$1"
+  JOB_SET_SRC_FILENAME="${str_destdir}"
+  update-metadata
 }
 
 set-option() {
@@ -113,11 +101,11 @@ set-preset() {
 
   if [ -f "/etc/handbrake-mediaencoder/presets/${preset}.json" ]; then
     # choose preset name
-    cp "/etc/handbrake-mediaencoder/presets/${preset}.json" "${JOB_VER}/preset.json"
-    PRESET_NAME=$(jq -r .PresetList[0].PresetName "${JOB_VER}/preset.json")
+    cp "/etc/handbrake-mediaencoder/presets/${preset}.json" "${JOB_VERSION}/preset.json"
+    PRESET_NAME=$(jq -r .PresetList[0].PresetName "${JOB_VERSION}/preset.json")
 
     # choose video file extension based on video container
-    local video_format=$(jq -r .PresetList[0].FileFormat "${JOB_VER}/preset.json")
+    local video_format=$(jq -r .PresetList[0].FileFormat "${JOB_VERSION}/preset.json")
     case "${video_format}" in
       "av_mp4")
         JOB_FILE_EXT="mp4"
@@ -144,15 +132,48 @@ update-json() {
     jq_query="( ${jq_search} ) |= ${jq_value}"
   fi
 
-  jq "${jq_query}" "${JOB_VER}/preset.json" > "${JOB_VER}/preset.json-update"
-  rm "${JOB_VER}/preset.json"
-  mv "${JOB_VER}/preset.json-update" "${JOB_VER}/preset.json"
+  jq "${jq_query}" "${JOB_VERSION}/preset.json" > "${JOB_VERSION}/preset.json-update"
+  rm "${JOB_VERSION}/preset.json"
+  mv "${JOB_VERSION}/preset.json-update" "${JOB_VERSION}/preset.json"
 }
 
-while getopts ":hb:d:f:o:p:" opt; do
+# will check for data set and update the destinations accordingly
+update-metadata() {
+  if [[ -n "${JOB_SET_DESTDIR}" && -n "${JOB_SET_SRC_FILENAME}" ]]; then
+    local filename_fullpath=$(readlink -f "${JOB_SET_SRC_FILENAME}")
+    local filename_fullpath_no_ext="${filename_fullpath%.*}"
+    local filename="${filename_fullpath##*/}"
+    local filename_no_ext="${filename%.*}"
+
+    JOB_SRC_FILENAME="${filename_fullpath}"
+
+    # when BASEDIR is supplied we shall remove it from filename path so we can build the
+    # same directory structure for de DESTDIR
+    #
+    # ex1: the file and the folder structure will be rendered in destination dir
+    #      filename => /mnt/folder1/folder2/file.mkv
+    #      basedir => /mnt/folder1
+    #      destdir => /mnt/folder3
+    #      filename_dest => /mnt/folder3/folder2/file.mkv
+    #
+    # ex2: the file will be rendered on destination dir
+    #      filename => /mnt/folder1/folder2/file.mkv
+    #      basedir => 
+    #      destdir => /mnt/folder3
+    #      filename_dest => /mnt/folder3/file.mkv
+    if [ -n "$JOB_SET_BASEDIR" ]; then
+      JOB_DST_FILENAME="${JOB_SET_DESTDIR}/${filename_fullpath_no_ext#$JOB_SET_BASEDIR}"
+    else
+      JOB_DST_FILENAME="${JOB_SET_DESTDIR}/${filename_no_ext}"
+    fi
+  fi
+}
+
+while getopts ":hb:d:ef:o:p:" opt; do
     case "$opt" in
         b) set-basedir "$OPTARG" ;;
         d) set-destdir "$OPTARG" ;;
+        e) JOB_SET_ENFORCE="y" ;;
         f) set-filename "$OPTARG" ;;
         h) echo "help" ;;
         o) set-option "$OPTARG" ;;
@@ -163,15 +184,25 @@ while getopts ":hb:d:f:o:p:" opt; do
 done
 shift $(( OPTIND - 1 ))
 
+# ensure destination directory based on final file name
+mkdir -p "${JOB_DST_FILENAME%/*}"
+
 # will encode only if the file is missing
-if [ ! -f "${JOB_DST_FILENAME} - ${JOB_FILE_SUFFIX}.${JOB_FILE_EXT}" ]; then
+if [[ "${JOB_SET_ENFORCE}" =~ y || ! -f "${JOB_DST_FILENAME} - ${JOB_FILE_SUFFIX}.${JOB_FILE_EXT}" ]]; then
   HandBrakeCLI \
-    --preset-import-file "${JOB_VER}/preset.json" \
+    --preset-import-file "${JOB_VERSION}/preset.json" \
     -Z "${PRESET_NAME}" \
     --all-audio \
     -i "${JOB_SRC_FILENAME}" \
     -o "${JOB_DST_FILENAME} - ${JOB_FILE_SUFFIX}.${JOB_FILE_EXT}"
+  JOB_EXIT_CODE="$?"
+fi
+
+# only proceed to copy subtitle if the conversion job was successful
+if [[ "${JOB_EXIT_CODE}" =~ 0 ]]; then
+  # will copy subtitles enforcing overwrite when specified
+  copy-subtitles "${JOB_SET_ENFORCE}"
 fi
 
 # will clean the temporary folder
-rm -rf "${JOB_VER}"
+rm -rf "${JOB_VERSION}"
