@@ -1,0 +1,18 @@
+version: "3.7"
+services:
+  handbrake-mediaencoder:
+    image: handbrake-mediaencoder:0.0.0
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: handbrake-mediaencoder
+    command: bash
+    volumes:
+      - type: bind
+        source: /mnt/media
+        target: /mnt/media
+        read_only: true
+      - type: bind
+        source: /mnt/media/optimized
+        target: /mnt/media-optimized
+        read_only: false
