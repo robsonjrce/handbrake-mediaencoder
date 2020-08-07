@@ -122,6 +122,10 @@ set-preset() {
       "av_mp4")
         JOB_FILE_EXT="mp4"
       ;;
+
+      "av_mkv")
+        JOB_FILE_EXT="mkv"
+      ;;
     esac
   else
     echo ":: preset ${preset} not found"
