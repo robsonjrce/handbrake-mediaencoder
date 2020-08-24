@@ -1,3 +1,11 @@
+FROM golang:1.14.7 as builder
+ADD src/ /go/src/
+WORKDIR /go/src/
+#RUN go get -d -v golang.org/x/net/html
+RUN go get -d -v ./...
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ../bin/app .
+RUN chmod +x ../bin/app
+
 FROM ubuntu:18.04
 MAINTAINER Robson Jr "http://robsonjr.com.br"
 
@@ -37,12 +45,14 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 ENV SHELL /bin/bash
 
-ENV HOME /home/handbrake-mediaencoder
-RUN useradd --create-home --shell /bin/bash --home-dir $HOME handbrake-mediaencoder \
-    && echo "handbrake-mediaencoder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/handbrake-mediaencoder \
-    && chmod 0440 /etc/sudoers.d/handbrake-mediaencoder
-USER handbrake-mediaencoder
+ENV HOME /home/mediaencoder
+RUN useradd --create-home --shell /bin/bash --home-dir $HOME mediaencoder \
+    && echo "mediaencoder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/mediaencoder \
+    && chmod 0440 /etc/sudoers.d/mediaencoder
+USER mediaencoder
 
-ADD docker-entrypoint.sh    /
-ADD assets/filesystem/      /
+ADD docker-entrypoint.sh        /
+ADD assets/filesystem/          /
+COPY --from=builder /go/bin/app /usr/local/bin/mediaencoder-scheduler
+
 ENTRYPOINT ["/docker-entrypoint.sh"]

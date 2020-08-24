@@ -192,7 +192,7 @@ if [[ "${JOB_SET_ENFORCE}" =~ y || ! -f "${JOB_DST_FILENAME} - ${JOB_FILE_SUFFIX
   HandBrakeCLI \
     --preset-import-file "${JOB_VERSION}/preset.json" \
     -Z "${PRESET_NAME}" \
-    --all-audio \
+    --first-audio \
     -i "${JOB_SRC_FILENAME}" \
     -o "${JOB_DST_FILENAME} - ${JOB_FILE_SUFFIX}.${JOB_FILE_EXT}"
   JOB_EXIT_CODE="$?"
