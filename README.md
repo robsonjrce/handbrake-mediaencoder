@@ -19,6 +19,35 @@ Raising quality minus 1-2 RF may produce better results when encoding animated S
 
 Using higher than recommended quality settings can lead to extremely large files that may not be compatible with your devices. When in doubt, stick to the recommended range or use the default setting for the Preset you selected.
 
+## Bitrate settings
+
+For typical streaming video applications, its recommended a range of about 400Kbps to about 5.0Mbps.
+
+The ideal bitrate ladder is as follows:
+
+```
+Resolution  Bitrate (kbps)
+1920x1080   5800
+1920x1080   4300
+1280x720    3500
+1280x720    2750
+720x404     1750
+720x404     1100
+512x288     700
+384x216     400
+```
+
+The minimum bitrate ladder is as follows:
+
+```
+Resolution  Bitrate (kbps)
+1920x1080   4300
+1280x720    2650
+720x404     1500
+512x288     800
+384x216     400
+```
+
 ## How to use
 
 You should edit the `docker-compose.yml` file accordingly with your needs. I do advise however that your main media should be **read only** and your `docker-compose.yml` should look something like this:
