@@ -99,9 +99,9 @@ set-preset() {
   local preset="$1"
   PRESET_FILE="${preset}"
 
-  if [ -f "/etc/handbrake-mediaencoder/presets/${preset}.json" ]; then
+  if [ -f "/etc/mediaencoder/presets/${preset}.json" ]; then
     # choose preset name
-    cp "/etc/handbrake-mediaencoder/presets/${preset}.json" "${JOB_VERSION}/preset.json"
+    cp "/etc/mediaencoder/presets/${preset}.json" "${JOB_VERSION}/preset.json"
     PRESET_NAME=$(jq -r .PresetList[0].PresetName "${JOB_VERSION}/preset.json")
 
     # choose video file extension based on video container
